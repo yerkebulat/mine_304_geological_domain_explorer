@@ -12,10 +12,10 @@ const state = {
 };
 
 const colors = {
-  chlorite: "#2f7d5c",
-  potassic: "#c58b2d",
-  quartz: "#4b8b9d",
-  argillic: "#b14d45",
+  chlorite: "#278263",
+  potassic: "#c88f2f",
+  quartz: "#227c92",
+  argillic: "#c1534a",
   waste: "#7b7f83",
   uncertainty: "rgba(255, 255, 255, 0.46)",
   line: "rgba(28, 33, 38, 0.78)",
@@ -54,6 +54,7 @@ const controls = {
 };
 
 const samples = createSamples();
+const dpr = Math.max(1, window.devicePixelRatio || 1);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -176,13 +177,13 @@ function clear() {
 
 function drawBackground() {
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, "#d4d7d0");
-  gradient.addColorStop(0.22, "#e5dfd2");
-  gradient.addColorStop(1, "#c9bda9");
+  gradient.addColorStop(0, "#e6ebe6");
+  gradient.addColorStop(0.22, "#d7ddd4");
+  gradient.addColorStop(1, "#b9b0a2");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  ctx.fillStyle = "#c6c2b5";
+  ctx.fillStyle = "#aaa394";
   ctx.beginPath();
   ctx.moveTo(0, canvas.height);
   for (let px = 0; px <= canvas.width; px += 12) {
@@ -195,7 +196,7 @@ function drawBackground() {
 }
 
 function drawDomains() {
-  const cell = Math.max(4, Math.floor(canvas.width / 190));
+  const cell = Math.max(2, Math.floor(canvas.width / 330));
   let domainOneCells = 0;
   let totalCells = 0;
 
@@ -213,7 +214,7 @@ function drawDomains() {
         domainOneCells += 1;
       }
 
-      const depthShade = clamp((field.rockY - 0.04) * 0.16, 0, 0.14);
+      const depthShade = clamp((field.rockY - 0.04) * 0.13, 0, 0.12);
       let fill = field.classColor;
 
       if (state.showProbability) {
@@ -234,7 +235,7 @@ function drawDomains() {
       }
 
       if (state.showUncertainty && field.uncertainty > 0.62) {
-        const alpha = clamp((field.uncertainty - 0.55) * 0.75, 0.06, 0.32);
+        const alpha = clamp((field.uncertainty - 0.55) * 0.72, 0.08, 0.34);
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.fillRect(px, py, cell + 1, cell + 1);
       }
@@ -253,7 +254,7 @@ function drawBoundaries() {
   drawBoundaryLine((x) => {
     const surface = terrain(x);
     return surface + mainBoundary(x, state.smoothness) * (0.92 - surface);
-  }, colors.line, 3.2);
+  }, "rgba(16, 19, 22, 0.82)", 3.4);
 
   if (state.mode === "four") {
     drawBoundaryLine((x) => {
@@ -272,7 +273,7 @@ function drawBoundaryLine(yForX, strokeStyle, width) {
   ctx.save();
   ctx.lineWidth = width;
   ctx.strokeStyle = strokeStyle;
-  ctx.setLineDash([10, 7]);
+  ctx.setLineDash([14, 8]);
   ctx.lineCap = "round";
   ctx.beginPath();
   for (let px = 0; px <= canvas.width; px += 8) {
@@ -294,8 +295,8 @@ function drawSamples() {
   }
 
   ctx.save();
-  ctx.lineWidth = 1.6;
-  ctx.strokeStyle = colors.drillhole;
+  ctx.lineWidth = 1.35;
+  ctx.strokeStyle = "rgba(18, 22, 26, 0.45)";
 
   const grouped = new Map();
   samples.forEach((sample) => {
@@ -327,18 +328,48 @@ function drawSamples() {
     const py = sample.y * canvas.height;
     ctx.beginPath();
     ctx.fillStyle = field.classColor;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-    ctx.lineWidth = 1.8;
-    ctx.arc(px, py, 4.5, 0, Math.PI * 2);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+    ctx.lineWidth = 1.5;
+    ctx.arc(px, py, 3.9, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   });
   ctx.restore();
 }
 
+function drawDomainLabels() {
+  ctx.save();
+  ctx.font = `700 ${Math.max(13, canvas.width / 88)}px Inter, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+  ctx.strokeStyle = "rgba(16, 19, 22, 0.24)";
+  ctx.lineWidth = 4;
+
+  const labels = state.mode === "binary"
+    ? [
+        { text: "Domain group 1", x: 0.28, y: 0.35 },
+        { text: "Domain group 2", x: 0.72, y: 0.68 },
+      ]
+    : [
+        { text: "Chlorite-sericite", x: 0.24, y: 0.31 },
+        { text: "Potassic", x: 0.55, y: 0.48 },
+        { text: "Quartz-sericite", x: 0.78, y: 0.58 },
+        { text: "Argillic", x: 0.58, y: 0.79 },
+      ];
+
+  labels.forEach((label) => {
+    const x = label.x * canvas.width;
+    const y = label.y * canvas.height;
+    ctx.strokeText(label.text, x, y);
+    ctx.fillText(label.text, x, y);
+  });
+  ctx.restore();
+}
+
 function drawSurfaceAndGrid() {
   ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.28)";
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
   ctx.lineWidth = 1;
   for (let i = 1; i < 6; i += 1) {
     const y = (i / 6) * canvas.height;
@@ -348,7 +379,7 @@ function drawSurfaceAndGrid() {
     ctx.stroke();
   }
 
-  ctx.fillStyle = "#726856";
+  ctx.fillStyle = "#6b6255";
   ctx.beginPath();
   ctx.moveTo(0, terrain(0) * canvas.height);
   for (let px = 0; px <= canvas.width; px += 10) {
@@ -360,7 +391,7 @@ function drawSurfaceAndGrid() {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(32, 37, 42, 0.44)";
+  ctx.strokeStyle = "rgba(18, 22, 26, 0.48)";
   ctx.lineWidth = 2;
   ctx.beginPath();
   for (let px = 0; px <= canvas.width; px += 10) {
@@ -401,9 +432,9 @@ function renderLegend() {
 function updateText() {
   controls.thresholdValue.textContent = state.threshold.toFixed(2);
   controls.smoothnessValue.textContent = String(state.smoothness);
-  controls.modeLabel.textContent = state.mode === "binary" ? "Binary" : "Four";
+  controls.modeLabel.textContent = state.mode === "binary" ? "Binary model" : "Four-domain model";
   controls.viewTitle.textContent = state.mode === "binary"
-    ? "Binary geological domains"
+    ? "Binary probability domain"
     : "Hierarchical four-domain model";
 }
 
@@ -413,9 +444,20 @@ function render() {
   drawDomains();
   drawSurfaceAndGrid();
   drawBoundaries();
+  drawDomainLabels();
   drawSamples();
   renderLegend();
   updateText();
+}
+
+function sizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const nextWidth = Math.max(700, Math.round(rect.width * dpr));
+  const nextHeight = Math.max(430, Math.round(rect.height * dpr));
+  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
+    canvas.width = nextWidth;
+    canvas.height = nextHeight;
+  }
 }
 
 function bindControls() {
@@ -464,4 +506,9 @@ function bindControls() {
 }
 
 bindControls();
+window.addEventListener("resize", () => {
+  sizeCanvas();
+  render();
+});
+sizeCanvas();
 render();

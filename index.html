@@ -11,153 +11,141 @@
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <section class="workspace" aria-label="Geological domaining explorer">
-        <header class="masthead">
-          <div>
-            <p class="course">MINE 304 paper presentation</p>
-            <h1>Geological Domaining Explorer</h1>
-          </div>
-          <div class="paper-tag">
-            <span>Koruk & Ortiz, 2023</span>
-            <strong>Ensemble SVC</strong>
-          </div>
-        </header>
-
-        <div class="app-grid">
-          <aside class="control-panel" aria-label="Model controls">
-            <section class="control-group">
-              <div class="group-heading">
-                <span>Domain Model</span>
-                <output id="modeLabel">Binary</output>
-              </div>
-              <div class="segmented" role="radiogroup" aria-label="Domain model">
-                <label>
-                  <input type="radio" name="modelMode" value="binary" checked>
-                  <span>Binary</span>
-                </label>
-                <label>
-                  <input type="radio" name="modelMode" value="four">
-                  <span>Four domains</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="control-group">
-              <div class="group-heading">
-                <span>Probability Threshold</span>
-                <output id="thresholdValue">0.50</output>
-              </div>
-              <input
-                id="threshold"
-                class="range"
-                type="range"
-                min="0.35"
-                max="0.65"
-                value="0.50"
-                step="0.01"
-                aria-label="Probability threshold"
-              >
-              <div class="range-note">
-                <span>Domain 1 proportion</span>
-                <strong id="domainShare">50%</strong>
-              </div>
-            </section>
-
-            <section class="control-group">
-              <div class="group-heading">
-                <span>SVC Boundary Smoothness</span>
-                <output id="smoothnessValue">68</output>
-              </div>
-              <input
-                id="smoothness"
-                class="range"
-                type="range"
-                min="20"
-                max="100"
-                value="68"
-                step="1"
-                aria-label="SVC boundary smoothness"
-              >
-              <div class="range-labels">
-                <span>Local detail</span>
-                <span>Smoother contact</span>
-              </div>
-            </section>
-
-            <section class="control-group check-grid" aria-label="Map layers">
-              <label class="switch-row">
-                <input id="showProbability" type="checkbox" checked>
-                <span>Probability field</span>
-              </label>
-              <label class="switch-row">
-                <input id="showUncertainty" type="checkbox" checked>
-                <span>Uncertainty band</span>
-              </label>
-              <label class="switch-row">
-                <input id="showSamples" type="checkbox" checked>
-                <span>Drillhole samples</span>
-              </label>
-              <label class="switch-row">
-                <input id="showBoundaries" type="checkbox" checked>
-                <span>Inferred boundaries</span>
-              </label>
-            </section>
-
-            <section class="metrics" aria-label="Paper metrics">
-              <div>
-                <span>Binary balanced accuracy</span>
-                <strong>91.3%</strong>
-              </div>
-              <div>
-                <span>Four-domain balanced accuracy</span>
-                <strong>73.0%</strong>
-              </div>
-              <div>
-                <span>BlockSIS four-domain benchmark</span>
-                <strong>69.4%</strong>
-              </div>
-            </section>
-          </aside>
-
-          <section class="visual-panel" aria-label="Interactive cross-section">
-            <div class="section-title">
-              <div>
-                <p>Porphyry Copper Case Study</p>
-                <h2 id="viewTitle">Binary geological domains</h2>
-              </div>
-              <button id="resetView" type="button">Reset</button>
-            </div>
-
-            <div class="canvas-frame">
-              <canvas id="domainCanvas" width="1160" height="680" aria-label="Synthetic geological domain cross-section"></canvas>
-              <div class="depth-axis" aria-hidden="true">
-                <span>0 m</span>
-                <span>300 m</span>
-                <span>600 m</span>
-              </div>
-            </div>
-
-            <div class="legend" id="legend"></div>
-          </section>
+    <main class="shell">
+      <header class="topbar">
+        <div class="title-block">
+          <p>MINE 304 | Koruk & Ortiz (2023)</p>
+          <h1>Geological domaining with ensemble SVC</h1>
         </div>
+        <dl class="score-strip" aria-label="Reported model performance">
+          <div>
+            <dt>Binary</dt>
+            <dd>91.3%</dd>
+          </div>
+          <div>
+            <dt>Four domains</dt>
+            <dd>73.0%</dd>
+          </div>
+          <div>
+            <dt>BlockSIS</dt>
+            <dd>69.4%</dd>
+          </div>
+        </dl>
+      </header>
 
-        <section class="bottom-grid" aria-label="Presentation summary">
-          <div class="workflow">
-            <span class="step active">1. Geochemistry</span>
-            <span class="arrow">-></span>
-            <span class="step">2. Clustering</span>
-            <span class="arrow">-></span>
-            <span class="step">3. Ensemble SVC</span>
-            <span class="arrow">-></span>
-            <span class="step">4. Probability domains</span>
+      <section class="stage" aria-label="Interactive geological domaining demo">
+        <section class="map-area" aria-label="Synthetic geological cross-section">
+          <div class="map-heading">
+            <div>
+              <span>Porphyry copper cross-section</span>
+              <h2 id="viewTitle">Binary probability domain</h2>
+            </div>
+            <div class="model-pill" id="modeLabel">Binary model</div>
           </div>
 
-          <div class="takeaway">
-            <p>Closing point</p>
-            <strong>Machine learning makes geological domaining more reproducible, but the final model still depends on geological interpretation.</strong>
+          <div class="canvas-wrap">
+            <canvas id="domainCanvas" width="1400" height="780" aria-label="Synthetic geological domain cross-section"></canvas>
+            <div class="depth-axis" aria-hidden="true">
+              <span>0 m</span>
+              <span>300 m</span>
+              <span>600 m</span>
+            </div>
           </div>
+
+          <div class="legend" id="legend"></div>
         </section>
+
+        <aside class="instrument-panel" aria-label="Model controls">
+          <section class="instrument-block">
+            <span class="label">Model</span>
+            <div class="segmented" role="radiogroup" aria-label="Domain model">
+              <label>
+                <input type="radio" name="modelMode" value="binary" checked>
+                <span>Binary</span>
+              </label>
+              <label>
+                <input type="radio" name="modelMode" value="four">
+                <span>Four</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="instrument-block">
+            <div class="readout">
+              <span class="label">Threshold</span>
+              <output id="thresholdValue">0.50</output>
+            </div>
+            <input
+              id="threshold"
+              class="range"
+              type="range"
+              min="0.35"
+              max="0.65"
+              value="0.50"
+              step="0.01"
+              aria-label="Probability threshold"
+            >
+            <div class="sub-readout">
+              <span>Domain 1 share</span>
+              <strong id="domainShare">50%</strong>
+            </div>
+          </section>
+
+          <section class="instrument-block">
+            <div class="readout">
+              <span class="label">Boundary smoothness</span>
+              <output id="smoothnessValue">68</output>
+            </div>
+            <input
+              id="smoothness"
+              class="range"
+              type="range"
+              min="20"
+              max="100"
+              value="68"
+              step="1"
+              aria-label="SVC boundary smoothness"
+            >
+            <div class="range-labels">
+              <span>Detailed</span>
+              <span>Smooth</span>
+            </div>
+          </section>
+
+          <section class="instrument-block layer-grid" aria-label="Map layers">
+            <span class="label">Layers</span>
+            <label>
+              <input id="showProbability" type="checkbox" checked>
+              <span>Probability</span>
+            </label>
+            <label>
+              <input id="showUncertainty" type="checkbox" checked>
+              <span>Uncertainty</span>
+            </label>
+            <label>
+              <input id="showSamples" type="checkbox" checked>
+              <span>Samples</span>
+            </label>
+            <label>
+              <input id="showBoundaries" type="checkbox" checked>
+              <span>Boundary</span>
+            </label>
+          </section>
+
+          <button id="resetView" class="reset-button" type="button">Reset view</button>
+        </aside>
+      </section>
+
+      <section class="storyline" aria-label="Presentation takeaway">
+        <div class="workflow">
+          <span>Geochemistry</span>
+          <span>Clustering</span>
+          <span>Ensemble SVC</span>
+          <span>Probability map</span>
+        </div>
+        <p>
+          The useful output is not only a domain label. The probability field shows where the geological contact is reliable and where interpretation should be checked.
+        </p>
       </section>
     </main>
 
