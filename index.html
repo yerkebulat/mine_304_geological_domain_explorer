@@ -3,149 +3,132 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Geological Domaining Explorer</title>
+    <title>Geological Domaining Paper Companion</title>
     <meta
       name="description"
-      content="Interactive geological domaining demo based on unsupervised clustering and ensemble support vector classification."
+      content="Interactive paper companion for geological domaining with unsupervised clustering and ensemble support vector classification."
     >
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div class="title-block">
-          <p>MINE 304 | Koruk & Ortiz (2023)</p>
-          <h1>Geological domaining with ensemble SVC</h1>
+    <main class="page">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">MINE 304 paper presentation</p>
+          <h1>From geochemistry to geological domains</h1>
+          <p class="intro">
+            A compact visual summary of Koruk and Ortiz (2023): unsupervised clustering creates training labels, ensemble SVC interpolates them spatially, and the probability field highlights uncertain contacts.
+          </p>
         </div>
-        <dl class="score-strip" aria-label="Reported model performance">
+
+        <dl class="source-card" aria-label="Paper reference">
           <div>
-            <dt>Binary</dt>
-            <dd>91.3%</dd>
+            <dt>Paper</dt>
+            <dd>Koruk & Ortiz, 2023</dd>
           </div>
           <div>
-            <dt>Four domains</dt>
-            <dd>73.0%</dd>
-          </div>
-          <div>
-            <dt>BlockSIS</dt>
-            <dd>69.4%</dd>
+            <dt>Method</dt>
+            <dd>Unsupervised clustering + ensemble SVC</dd>
           </div>
         </dl>
       </header>
 
-      <section class="stage" aria-label="Interactive geological domaining demo">
-        <section class="map-area" aria-label="Synthetic geological cross-section">
-          <div class="map-heading">
-            <div>
-              <span>Porphyry copper cross-section</span>
-              <h2 id="viewTitle">Binary probability domain</h2>
-            </div>
-            <div class="model-pill" id="modeLabel">Binary model</div>
+      <section class="summary-grid" aria-label="Interactive paper summary">
+        <section class="workflow-card" aria-label="Method workflow">
+          <div class="card-heading">
+            <p class="eyebrow">Method workflow</p>
+            <h2 id="stepTitle">Start with geochemical variables</h2>
           </div>
 
-          <div class="canvas-wrap">
-            <canvas id="domainCanvas" width="1400" height="780" aria-label="Synthetic geological domain cross-section"></canvas>
-            <div class="depth-axis" aria-hidden="true">
-              <span>0 m</span>
-              <span>300 m</span>
-              <span>600 m</span>
-            </div>
+          <div class="step-rail" role="tablist" aria-label="Workflow steps">
+            <button class="step-button active" type="button" data-step="0">
+              <span>01</span>
+              Geochemistry
+            </button>
+            <button class="step-button" type="button" data-step="1">
+              <span>02</span>
+              Clustering
+            </button>
+            <button class="step-button" type="button" data-step="2">
+              <span>03</span>
+              Ensemble SVC
+            </button>
+            <button class="step-button" type="button" data-step="3">
+              <span>04</span>
+              Probability domains
+            </button>
           </div>
 
-          <div class="legend" id="legend"></div>
+          <div class="step-detail">
+            <p id="stepText">
+              Geological knowledge and EDA select variables that separate alteration and mineralization behavior.
+            </p>
+            <ul id="stepPoints"></ul>
+          </div>
         </section>
 
-        <aside class="instrument-panel" aria-label="Model controls">
-          <section class="instrument-block">
-            <span class="label">Model</span>
-            <div class="segmented" role="radiogroup" aria-label="Domain model">
-              <label>
-                <input type="radio" name="modelMode" value="binary" checked>
-                <span>Binary</span>
-              </label>
-              <label>
-                <input type="radio" name="modelMode" value="four">
-                <span>Four</span>
-              </label>
+        <section class="result-card" aria-label="Reported results">
+          <p class="eyebrow">Reported results</p>
+          <div class="metric-list">
+            <div class="metric">
+              <span>Binary ensemble SVC</span>
+              <strong>91.3%</strong>
+              <small>balanced accuracy</small>
             </div>
-          </section>
-
-          <section class="instrument-block">
-            <div class="readout">
-              <span class="label">Threshold</span>
-              <output id="thresholdValue">0.50</output>
+            <div class="metric">
+              <span>Four-domain ensemble SVC</span>
+              <strong>73.0%</strong>
+              <small>balanced accuracy</small>
             </div>
-            <input
-              id="threshold"
-              class="range"
-              type="range"
-              min="0.35"
-              max="0.65"
-              value="0.50"
-              step="0.01"
-              aria-label="Probability threshold"
-            >
-            <div class="sub-readout">
-              <span>Domain 1 share</span>
-              <strong id="domainShare">50%</strong>
+            <div class="metric muted">
+              <span>Four-domain BlockSIS</span>
+              <strong>69.4%</strong>
+              <small>benchmark</small>
             </div>
-          </section>
-
-          <section class="instrument-block">
-            <div class="readout">
-              <span class="label">Boundary smoothness</span>
-              <output id="smoothnessValue">68</output>
-            </div>
-            <input
-              id="smoothness"
-              class="range"
-              type="range"
-              min="20"
-              max="100"
-              value="68"
-              step="1"
-              aria-label="SVC boundary smoothness"
-            >
-            <div class="range-labels">
-              <span>Detailed</span>
-              <span>Smooth</span>
-            </div>
-          </section>
-
-          <section class="instrument-block layer-grid" aria-label="Map layers">
-            <span class="label">Layers</span>
-            <label>
-              <input id="showProbability" type="checkbox" checked>
-              <span>Probability</span>
-            </label>
-            <label>
-              <input id="showUncertainty" type="checkbox" checked>
-              <span>Uncertainty</span>
-            </label>
-            <label>
-              <input id="showSamples" type="checkbox" checked>
-              <span>Samples</span>
-            </label>
-            <label>
-              <input id="showBoundaries" type="checkbox" checked>
-              <span>Boundary</span>
-            </label>
-          </section>
-
-          <button id="resetView" class="reset-button" type="button">Reset view</button>
-        </aside>
+          </div>
+        </section>
       </section>
 
-      <section class="storyline" aria-label="Presentation takeaway">
-        <div class="workflow">
-          <span>Geochemistry</span>
-          <span>Clustering</span>
-          <span>Ensemble SVC</span>
-          <span>Probability map</span>
+      <section class="visual-card" aria-label="Domain and uncertainty visual">
+        <div class="visual-heading">
+          <div>
+            <p class="eyebrow">Key idea</p>
+            <h2>Classification is useful, uncertainty is the message</h2>
+          </div>
+
+          <div class="segmented" role="radiogroup" aria-label="Domain visual mode">
+            <label>
+              <input type="radio" name="visualMode" value="hard" checked>
+              <span>Hard domains</span>
+            </label>
+            <label>
+              <input type="radio" name="visualMode" value="probability">
+              <span>Probability</span>
+            </label>
+          </div>
         </div>
-        <p>
-          The useful output is not only a domain label. The probability field shows where the geological contact is reliable and where interpretation should be checked.
-        </p>
+
+        <div class="canvas-shell">
+          <canvas id="domainCanvas" width="1400" height="520" aria-label="Schematic geological domain contact"></canvas>
+        </div>
+
+        <div class="visual-footer">
+          <p id="visualCaption">
+            Hard domains give a clean boundary, but they hide how confident the model is near the contact.
+          </p>
+          <div class="legend" aria-label="Legend">
+            <span><i class="swatch domain-a"></i> Domain group 1</span>
+            <span><i class="swatch domain-b"></i> Domain group 2</span>
+            <span><i class="swatch uncertain"></i> Uncertain contact</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="closing-card" aria-label="Presentation takeaway">
+        <p class="eyebrow">Closing takeaway</p>
+        <strong>
+          The method does not replace geological interpretation. It makes domaining more reproducible and shows where interpretation should be reviewed.
+        </strong>
       </section>
     </main>
 

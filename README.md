@@ -1,17 +1,16 @@
-# Geological Domaining Explorer
+# Geological Domaining Paper Companion
 
-Interactive GitHub Pages demo for the MINE 304 Assignment 5 presentation.
+Interactive GitHub Pages companion for the MINE 304 Assignment 5 presentation.
 
-The app visualizes the main idea from Koruk and Ortiz (2023): geological
-domaining can combine unsupervised geochemical grouping with ensemble support
-vector classification to produce smooth categorical domains and an uncertainty
-view.
+The page summarizes Koruk and Ortiz (2023) with a short workflow, reported
+performance metrics, and a simple visual comparison between hard geological
+domains and probability-based uncertainty around the contact.
 
 Files:
 
 - `index.html` - page structure
 - `styles.css` - responsive layout and visual design
-- `script.js` - synthetic cross-section, controls, and canvas rendering
+- `script.js` - workflow interaction and schematic canvas rendering
 
 After pushing to GitHub, enable Pages from the repository settings:
 

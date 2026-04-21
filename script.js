@@ -1,67 +1,64 @@
+const steps = [
+  {
+    title: "Start with geochemical variables",
+    text: "Geological knowledge and EDA select variables that separate alteration and mineralization behavior.",
+    points: [
+      "The paper uses multivariate geochemistry rather than a single grade threshold.",
+      "Variable choice remains a geological decision, not a purely automatic step.",
+      "The goal is to find populations that can represent geological domains.",
+    ],
+  },
+  {
+    title: "Create initial domain labels",
+    text: "Unsupervised clustering separates sample populations so the classifier has training classes.",
+    points: [
+      "The workflow first estimates domain proportions from mixture behavior.",
+      "Samples are assigned to domains by matching multivariate distributions.",
+      "Logging is used for comparison, not as the direct training label.",
+    ],
+  },
+  {
+    title: "Interpolate with ensemble SVC",
+    text: "Support vector classification learns a spatial boundary, while the ensemble reduces dependence on one training subset.",
+    points: [
+      "RBF kernels allow curved contacts instead of straight cutoffs.",
+      "Multiple weak learners use different sample and variable subsets.",
+      "Averaging model outputs gives a smoother probability field.",
+    ],
+  },
+  {
+    title: "Convert probabilities into domains",
+    text: "The final model can be shown as hard categorical domains or as probabilities near the contact.",
+    points: [
+      "Binary performance was 91.3% balanced accuracy.",
+      "The four-domain hierarchical model reached 73.0% balanced accuracy.",
+      "Uncertain zones are useful because they mark where interpretation deserves attention.",
+    ],
+  },
+];
+
 const canvas = document.querySelector("#domainCanvas");
 const ctx = canvas.getContext("2d");
-
-const state = {
-  mode: "binary",
-  threshold: 0.5,
-  smoothness: 68,
-  showProbability: true,
-  showUncertainty: true,
-  showSamples: true,
-  showBoundaries: true,
-};
+const stepTitle = document.querySelector("#stepTitle");
+const stepText = document.querySelector("#stepText");
+const stepPoints = document.querySelector("#stepPoints");
+const visualCaption = document.querySelector("#visualCaption");
 
 const colors = {
-  chlorite: "#278263",
-  potassic: "#c88f2f",
-  quartz: "#227c92",
-  argillic: "#c1534a",
-  waste: "#7b7f83",
-  uncertainty: "rgba(255, 255, 255, 0.46)",
-  line: "rgba(28, 33, 38, 0.78)",
-  drillhole: "rgba(24, 29, 34, 0.68)",
+  green: "#287c5b",
+  teal: "#26758b",
+  gold: "#c28b2f",
+  red: "#bd524a",
+  rock: "#746c60",
+  grid: "rgba(255,255,255,0.26)",
+  ink: "rgba(19, 24, 27, 0.78)",
 };
 
-const domainSets = {
-  binary: [
-    { key: "d1", label: "Chlorite-sericite / potassic group", color: colors.chlorite },
-    { key: "d2", label: "Quartz-sericite / argillic group", color: colors.quartz },
-    { key: "uncertainty", label: "High uncertainty", color: "#ffffff" },
-  ],
-  four: [
-    { key: "chlorite", label: "Chlorite-sericite", color: colors.chlorite },
-    { key: "potassic", label: "Potassic", color: colors.potassic },
-    { key: "quartz", label: "Quartz-sericite", color: colors.quartz },
-    { key: "argillic", label: "Argillic", color: colors.argillic },
-    { key: "uncertainty", label: "High uncertainty", color: "#ffffff" },
-  ],
-};
-
-const controls = {
-  threshold: document.querySelector("#threshold"),
-  smoothness: document.querySelector("#smoothness"),
-  thresholdValue: document.querySelector("#thresholdValue"),
-  smoothnessValue: document.querySelector("#smoothnessValue"),
-  domainShare: document.querySelector("#domainShare"),
-  modeLabel: document.querySelector("#modeLabel"),
-  viewTitle: document.querySelector("#viewTitle"),
-  legend: document.querySelector("#legend"),
-  showProbability: document.querySelector("#showProbability"),
-  showUncertainty: document.querySelector("#showUncertainty"),
-  showSamples: document.querySelector("#showSamples"),
-  showBoundaries: document.querySelector("#showBoundaries"),
-  resetView: document.querySelector("#resetView"),
-};
-
-const samples = createSamples();
-const dpr = Math.max(1, window.devicePixelRatio || 1);
+let activeStep = 0;
+let visualMode = "hard";
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
-}
-
-function logistic(value, scale = 1) {
-  return 1 / (1 + Math.exp(-value / scale));
 }
 
 function lerp(a, b, t) {
@@ -69,21 +66,16 @@ function lerp(a, b, t) {
 }
 
 function hexToRgb(hex) {
-  const value = hex.replace("#", "");
-  const int = Number.parseInt(value, 16);
+  const clean = hex.replace("#", "");
+  const value = Number.parseInt(clean, 16);
   return {
-    r: (int >> 16) & 255,
-    g: (int >> 8) & 255,
-    b: int & 255,
+    r: (value >> 16) & 255,
+    g: (value >> 8) & 255,
+    b: value & 255,
   };
 }
 
-function rgba(hex, alpha) {
-  const { r, g, b } = hexToRgb(hex);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function mixColor(hexA, hexB, t) {
+function mix(hexA, hexB, t) {
   const a = hexToRgb(hexA);
   const b = hexToRgb(hexB);
   const r = Math.round(lerp(a.r, b.r, t));
@@ -92,197 +84,136 @@ function mixColor(hexA, hexB, t) {
   return `rgb(${r}, ${g}, ${blue})`;
 }
 
-function terrain(x) {
-  return 0.11 + 0.018 * Math.sin(x * Math.PI * 2.2) + 0.012 * Math.sin(x * Math.PI * 6.5 + 0.8);
+function surface(x) {
+  return 0.16 + 0.018 * Math.sin(x * Math.PI * 2.4) + 0.009 * Math.sin(x * Math.PI * 7.5);
 }
 
-function mainBoundary(x, smoothness) {
-  const detail = (100 - smoothness) / 100;
-  const smooth = 0.48 + 0.11 * Math.sin((x - 0.08) * Math.PI * 1.45);
-  const local = detail * (0.055 * Math.sin(x * Math.PI * 7.2 + 0.9) + 0.035 * Math.sin(x * Math.PI * 13.2));
-  return smooth + local;
+function contact(x) {
+  return 0.47 + 0.11 * Math.sin((x - 0.12) * Math.PI * 1.6) + 0.025 * Math.sin(x * Math.PI * 5.5);
 }
 
-function upperSplit(x, smoothness) {
-  const detail = (100 - smoothness) / 120;
-  return 0.34 + 0.075 * Math.sin(x * Math.PI * 2.8 + 1.4) + detail * 0.045 * Math.sin(x * Math.PI * 8.5);
+function probabilityAt(x, y) {
+  const top = surface(x);
+  const normalizedDepth = clamp((y - top) / (0.93 - top), 0, 1);
+  const boundary = contact(x);
+  return 1 / (1 + Math.exp((normalizedDepth - boundary) / 0.055));
 }
 
-function lowerSplit(x, smoothness) {
-  const detail = (100 - smoothness) / 120;
-  return 0.67 + 0.08 * Math.sin(x * Math.PI * 2.1 - 0.6) + detail * 0.035 * Math.sin(x * Math.PI * 9.6 + 0.2);
-}
+function sizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const width = Math.max(760, Math.round(rect.width * dpr));
+  const height = Math.max(360, Math.round(rect.height * dpr));
 
-function fieldAt(x, y) {
-  const surface = terrain(x);
-  const rockY = clamp((y - surface) / (0.92 - surface), 0, 1);
-  const main = mainBoundary(x, state.smoothness);
-  const transition = lerp(0.032, 0.058, state.smoothness / 100);
-  const pDomainOne = logistic(main - rockY, transition);
-  const pUpper = logistic(upperSplit(x, state.smoothness) - rockY, transition * 0.95);
-  const pLower = logistic(lowerSplit(x, state.smoothness) - rockY, transition * 1.05);
-
-  const isDomainOne = pDomainOne >= state.threshold;
-  let classKey = isDomainOne ? "d1" : "d2";
-  let classColor = isDomainOne ? colors.chlorite : colors.quartz;
-  let confidence = Math.abs(pDomainOne - state.threshold) / 0.5;
-
-  if (state.mode === "four") {
-    if (isDomainOne) {
-      const potassicProbability = 1 - pUpper;
-      classKey = potassicProbability > 0.5 ? "potassic" : "chlorite";
-      classColor = potassicProbability > 0.5 ? colors.potassic : colors.chlorite;
-      confidence = Math.min(confidence, Math.abs(potassicProbability - 0.5) * 2);
-    } else {
-      const argillicProbability = 1 - pLower;
-      classKey = argillicProbability > 0.5 ? "argillic" : "quartz";
-      classColor = argillicProbability > 0.5 ? colors.argillic : colors.quartz;
-      confidence = Math.min(confidence, Math.abs(argillicProbability - 0.5) * 2);
-    }
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
   }
-
-  return {
-    rockY,
-    pDomainOne,
-    pUpper,
-    pLower,
-    classKey,
-    classColor,
-    confidence: clamp(confidence, 0, 1),
-    uncertainty: 1 - clamp(confidence, 0, 1),
-  };
-}
-
-function createSamples() {
-  const holes = [0.08, 0.16, 0.24, 0.33, 0.42, 0.52, 0.63, 0.74, 0.84, 0.93];
-  const result = [];
-
-  holes.forEach((x, holeIndex) => {
-    const collar = terrain(x) + 0.015;
-    const bottom = 0.89 + 0.02 * Math.sin(holeIndex * 1.7);
-    const count = 18 + (holeIndex % 3);
-    for (let i = 0; i < count; i += 1) {
-      const y = lerp(collar, bottom, i / (count - 1));
-      const offset = 0.006 * Math.sin(i * 2.3 + holeIndex);
-      result.push({ x: clamp(x + offset, 0.02, 0.98), y });
-    }
-  });
-
-  return result;
-}
-
-function clear() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function drawBackground() {
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, "#e6ebe6");
-  gradient.addColorStop(0.22, "#d7ddd4");
-  gradient.addColorStop(1, "#b9b0a2");
+  gradient.addColorStop(0, "#e9eeeb");
+  gradient.addColorStop(0.38, "#d5ddd8");
+  gradient.addColorStop(1, "#b8b0a4");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.fillStyle = "#aaa394";
-  ctx.beginPath();
-  ctx.moveTo(0, canvas.height);
-  for (let px = 0; px <= canvas.width; px += 12) {
-    const x = px / canvas.width;
-    ctx.lineTo(px, terrain(x) * canvas.height);
-  }
-  ctx.lineTo(canvas.width, canvas.height);
-  ctx.closePath();
-  ctx.fill();
 }
 
 function drawDomains() {
-  const cell = Math.max(2, Math.floor(canvas.width / 330));
-  let domainOneCells = 0;
-  let totalCells = 0;
+  const cell = Math.max(3, Math.floor(canvas.width / 360));
 
-  for (let py = 0; py < canvas.height; py += cell) {
-    for (let px = 0; px < canvas.width; px += cell) {
-      const x = (px + cell / 2) / canvas.width;
-      const y = (py + cell / 2) / canvas.height;
-      if (y < terrain(x)) {
+  for (let y = 0; y < canvas.height; y += cell) {
+    for (let x = 0; x < canvas.width; x += cell) {
+      const nx = (x + cell / 2) / canvas.width;
+      const ny = (y + cell / 2) / canvas.height;
+
+      if (ny < surface(nx)) {
         continue;
       }
 
-      const field = fieldAt(x, y);
-      totalCells += 1;
-      if (field.pDomainOne >= state.threshold) {
-        domainOneCells += 1;
-      }
+      const probability = probabilityAt(nx, ny);
+      const hardColor = probability >= 0.5 ? colors.green : colors.teal;
+      let fill = hardColor;
 
-      const depthShade = clamp((field.rockY - 0.04) * 0.13, 0, 0.12);
-      let fill = field.classColor;
-
-      if (state.showProbability) {
-        if (state.mode === "binary") {
-          fill = mixColor(colors.quartz, colors.chlorite, field.pDomainOne);
-        } else {
-          const faded = mixColor("#f2ecdd", field.classColor, 0.72 + field.confidence * 0.22);
-          fill = faded;
-        }
+      if (visualMode === "probability") {
+        fill = mix(colors.teal, colors.green, probability);
       }
 
       ctx.fillStyle = fill;
-      ctx.fillRect(px, py, cell + 1, cell + 1);
+      ctx.fillRect(x, y, cell + 1, cell + 1);
 
-      if (depthShade > 0) {
-        ctx.fillStyle = `rgba(20, 24, 28, ${depthShade})`;
-        ctx.fillRect(px, py, cell + 1, cell + 1);
+      const depthShade = clamp((ny - surface(nx)) * 0.13, 0, 0.11);
+      if (depthShade) {
+        ctx.fillStyle = `rgba(16, 19, 21, ${depthShade})`;
+        ctx.fillRect(x, y, cell + 1, cell + 1);
       }
 
-      if (state.showUncertainty && field.uncertainty > 0.62) {
-        const alpha = clamp((field.uncertainty - 0.55) * 0.72, 0.08, 0.34);
-        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-        ctx.fillRect(px, py, cell + 1, cell + 1);
+      if (visualMode === "probability") {
+        const uncertainty = 1 - Math.abs(probability - 0.5) * 2;
+        if (uncertainty > 0.48) {
+          ctx.fillStyle = `rgba(255,255,255,${0.12 + uncertainty * 0.22})`;
+          ctx.fillRect(x, y, cell + 1, cell + 1);
+        }
       }
     }
   }
-
-  const share = totalCells ? Math.round((domainOneCells / totalCells) * 100) : 0;
-  controls.domainShare.textContent = `${share}%`;
 }
 
-function drawBoundaries() {
-  if (!state.showBoundaries) {
-    return;
-  }
-
-  drawBoundaryLine((x) => {
-    const surface = terrain(x);
-    return surface + mainBoundary(x, state.smoothness) * (0.92 - surface);
-  }, "rgba(16, 19, 22, 0.82)", 3.4);
-
-  if (state.mode === "four") {
-    drawBoundaryLine((x) => {
-      const surface = terrain(x);
-      return surface + upperSplit(x, state.smoothness) * (0.92 - surface);
-    }, rgba(colors.potassic, 0.86), 2.1);
-
-    drawBoundaryLine((x) => {
-      const surface = terrain(x);
-      return surface + lowerSplit(x, state.smoothness) * (0.92 - surface);
-    }, rgba(colors.argillic, 0.86), 2.1);
-  }
-}
-
-function drawBoundaryLine(yForX, strokeStyle, width) {
+function drawGridAndSurface() {
   ctx.save();
-  ctx.lineWidth = width;
-  ctx.strokeStyle = strokeStyle;
-  ctx.setLineDash([14, 8]);
+  ctx.strokeStyle = colors.grid;
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 5; i += 1) {
+    const y = (i / 5) * canvas.height;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = colors.rock;
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for (let x = 0; x <= canvas.width; x += 10) {
+    const nx = x / canvas.width;
+    ctx.lineTo(x, surface(nx) * canvas.height);
+  }
+  ctx.lineTo(canvas.width, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(17,22,24,0.55)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x <= canvas.width; x += 10) {
+    const nx = x / canvas.width;
+    const y = surface(nx) * canvas.height;
+    if (x === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawContact() {
+  ctx.save();
+  ctx.strokeStyle = colors.ink;
+  ctx.lineWidth = visualMode === "hard" ? 4 : 2.5;
+  ctx.setLineDash(visualMode === "hard" ? [] : [14, 9]);
   ctx.lineCap = "round";
   ctx.beginPath();
-  for (let px = 0; px <= canvas.width; px += 8) {
-    const x = px / canvas.width;
-    const y = yForX(x) * canvas.height;
-    if (px === 0) {
-      ctx.moveTo(px, y);
+  for (let x = 0; x <= canvas.width; x += 8) {
+    const nx = x / canvas.width;
+    const top = surface(nx);
+    const y = (top + contact(nx) * (0.93 - top)) * canvas.height;
+    if (x === 0) {
+      ctx.moveTo(x, y);
     } else {
-      ctx.lineTo(px, y);
+      ctx.lineTo(x, y);
     }
   }
   ctx.stroke();
@@ -290,225 +221,106 @@ function drawBoundaryLine(yForX, strokeStyle, width) {
 }
 
 function drawSamples() {
-  if (!state.showSamples) {
-    return;
-  }
-
+  const holes = [0.09, 0.18, 0.28, 0.39, 0.51, 0.64, 0.76, 0.88];
   ctx.save();
-  ctx.lineWidth = 1.35;
-  ctx.strokeStyle = "rgba(18, 22, 26, 0.45)";
-
-  const grouped = new Map();
-  samples.forEach((sample) => {
-    const key = Math.round(sample.x * 1000);
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
-    }
-    grouped.get(key).push(sample);
-  });
-
-  grouped.forEach((hole) => {
-    const sorted = [...hole].sort((a, b) => a.y - b.y);
-    ctx.beginPath();
-    sorted.forEach((sample, index) => {
-      const px = sample.x * canvas.width;
-      const py = sample.y * canvas.height;
-      if (index === 0) {
-        ctx.moveTo(px, py);
-      } else {
-        ctx.lineTo(px, py);
-      }
-    });
-    ctx.stroke();
-  });
-
-  samples.forEach((sample) => {
-    const field = fieldAt(sample.x, sample.y);
-    const px = sample.x * canvas.width;
-    const py = sample.y * canvas.height;
-    ctx.beginPath();
-    ctx.fillStyle = field.classColor;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.92)";
+  holes.forEach((x, holeIndex) => {
+    const top = surface(x) + 0.025;
+    const bottom = 0.88 + 0.02 * Math.sin(holeIndex * 1.7);
+    ctx.strokeStyle = "rgba(18,23,26,0.45)";
     ctx.lineWidth = 1.5;
-    ctx.arc(px, py, 3.9, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x * canvas.width, top * canvas.height);
+    ctx.lineTo(x * canvas.width, bottom * canvas.height);
     ctx.stroke();
+
+    for (let i = 0; i < 13; i += 1) {
+      const y = lerp(top, bottom, i / 12);
+      const probability = probabilityAt(x, y);
+      ctx.fillStyle = probability >= 0.5 ? colors.green : colors.teal;
+      ctx.strokeStyle = "rgba(255,255,255,0.92)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(x * canvas.width, y * canvas.height, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
   });
   ctx.restore();
 }
 
-function drawDomainLabels() {
+function drawLabels() {
   ctx.save();
-  ctx.font = `700 ${Math.max(13, canvas.width / 88)}px Inter, system-ui, sans-serif`;
+  ctx.font = `800 ${Math.max(14, canvas.width / 90)}px Inter, system-ui, sans-serif`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
-  ctx.strokeStyle = "rgba(16, 19, 22, 0.24)";
+  ctx.fillStyle = "rgba(255,255,255,0.86)";
+  ctx.strokeStyle = "rgba(12,16,18,0.24)";
   ctx.lineWidth = 4;
 
-  const labels = state.mode === "binary"
+  const labels = visualMode === "hard"
     ? [
-        { text: "Domain group 1", x: 0.28, y: 0.35 },
-        { text: "Domain group 2", x: 0.72, y: 0.68 },
+        ["Domain group 1", 0.29, 0.38],
+        ["Domain group 2", 0.72, 0.70],
       ]
     : [
-        { text: "Chlorite-sericite", x: 0.24, y: 0.31 },
-        { text: "Potassic", x: 0.55, y: 0.48 },
-        { text: "Quartz-sericite", x: 0.78, y: 0.58 },
-        { text: "Argillic", x: 0.58, y: 0.79 },
+        ["High confidence", 0.25, 0.34],
+        ["Uncertain contact", 0.55, 0.55],
+        ["High confidence", 0.76, 0.76],
       ];
 
-  labels.forEach((label) => {
-    const x = label.x * canvas.width;
-    const y = label.y * canvas.height;
-    ctx.strokeText(label.text, x, y);
-    ctx.fillText(label.text, x, y);
+  labels.forEach(([text, x, y]) => {
+    ctx.strokeText(text, x * canvas.width, y * canvas.height);
+    ctx.fillText(text, x * canvas.width, y * canvas.height);
   });
   ctx.restore();
 }
 
-function drawSurfaceAndGrid() {
-  ctx.save();
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.22)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 6; i += 1) {
-    const y = (i / 6) * canvas.height;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
-  }
-
-  ctx.fillStyle = "#6b6255";
-  ctx.beginPath();
-  ctx.moveTo(0, terrain(0) * canvas.height);
-  for (let px = 0; px <= canvas.width; px += 10) {
-    const x = px / canvas.width;
-    ctx.lineTo(px, terrain(x) * canvas.height);
-  }
-  ctx.lineTo(canvas.width, 0);
-  ctx.lineTo(0, 0);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = "rgba(18, 22, 26, 0.48)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let px = 0; px <= canvas.width; px += 10) {
-    const x = px / canvas.width;
-    const y = terrain(x) * canvas.height;
-    if (px === 0) {
-      ctx.moveTo(px, y);
-    } else {
-      ctx.lineTo(px, y);
-    }
-  }
-  ctx.stroke();
-  ctx.restore();
-}
-
-function renderLegend() {
-  controls.legend.innerHTML = "";
-  domainSets[state.mode].forEach((item) => {
-    if (item.key === "uncertainty" && !state.showUncertainty) {
-      return;
-    }
-    const element = document.createElement("span");
-    element.className = "legend-item";
-
-    const swatch = document.createElement("span");
-    swatch.className = "swatch";
-    swatch.style.background = item.key === "uncertainty"
-      ? "repeating-linear-gradient(45deg, #ffffff, #ffffff 4px, #d8d0c2 4px, #d8d0c2 8px)"
-      : item.color;
-
-    const label = document.createElement("span");
-    label.textContent = item.label;
-    element.append(swatch, label);
-    controls.legend.append(element);
-  });
-}
-
-function updateText() {
-  controls.thresholdValue.textContent = state.threshold.toFixed(2);
-  controls.smoothnessValue.textContent = String(state.smoothness);
-  controls.modeLabel.textContent = state.mode === "binary" ? "Binary model" : "Four-domain model";
-  controls.viewTitle.textContent = state.mode === "binary"
-    ? "Binary probability domain"
-    : "Hierarchical four-domain model";
-}
-
-function render() {
-  clear();
+function drawCanvas() {
+  sizeCanvas();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawBackground();
   drawDomains();
-  drawSurfaceAndGrid();
-  drawBoundaries();
-  drawDomainLabels();
+  drawGridAndSurface();
+  drawContact();
   drawSamples();
-  renderLegend();
-  updateText();
+  drawLabels();
 }
 
-function sizeCanvas() {
-  const rect = canvas.getBoundingClientRect();
-  const nextWidth = Math.max(700, Math.round(rect.width * dpr));
-  const nextHeight = Math.max(430, Math.round(rect.height * dpr));
-  if (canvas.width !== nextWidth || canvas.height !== nextHeight) {
-    canvas.width = nextWidth;
-    canvas.height = nextHeight;
-  }
-}
+function updateStep(index) {
+  activeStep = index;
+  const step = steps[activeStep];
+  stepTitle.textContent = step.title;
+  stepText.textContent = step.text;
+  stepPoints.innerHTML = "";
 
-function bindControls() {
-  document.querySelectorAll("input[name='modelMode']").forEach((input) => {
-    input.addEventListener("change", (event) => {
-      state.mode = event.target.value;
-      render();
-    });
+  step.points.forEach((point) => {
+    const item = document.createElement("li");
+    item.textContent = point;
+    stepPoints.append(item);
   });
 
-  controls.threshold.addEventListener("input", (event) => {
-    state.threshold = Number(event.target.value);
-    render();
-  });
-
-  controls.smoothness.addEventListener("input", (event) => {
-    state.smoothness = Number(event.target.value);
-    render();
-  });
-
-  ["showProbability", "showUncertainty", "showSamples", "showBoundaries"].forEach((key) => {
-    controls[key].addEventListener("change", (event) => {
-      state[key] = event.target.checked;
-      render();
-    });
-  });
-
-  controls.resetView.addEventListener("click", () => {
-    state.mode = "binary";
-    state.threshold = 0.5;
-    state.smoothness = 68;
-    state.showProbability = true;
-    state.showUncertainty = true;
-    state.showSamples = true;
-    state.showBoundaries = true;
-
-    document.querySelector("input[name='modelMode'][value='binary']").checked = true;
-    controls.threshold.value = state.threshold;
-    controls.smoothness.value = state.smoothness;
-    controls.showProbability.checked = state.showProbability;
-    controls.showUncertainty.checked = state.showUncertainty;
-    controls.showSamples.checked = state.showSamples;
-    controls.showBoundaries.checked = state.showBoundaries;
-    render();
+  document.querySelectorAll(".step-button").forEach((button) => {
+    button.classList.toggle("active", Number(button.dataset.step) === activeStep);
   });
 }
 
-bindControls();
-window.addEventListener("resize", () => {
-  sizeCanvas();
-  render();
+function updateVisualMode(mode) {
+  visualMode = mode;
+  visualCaption.textContent = visualMode === "hard"
+    ? "Hard domains give a clean boundary, but they hide how confident the model is near the contact."
+    : "The probability view turns the contact into an uncertainty zone, making the model more useful for geological review.";
+  drawCanvas();
+}
+
+document.querySelectorAll(".step-button").forEach((button) => {
+  button.addEventListener("click", () => updateStep(Number(button.dataset.step)));
 });
-sizeCanvas();
-render();
+
+document.querySelectorAll("input[name='visualMode']").forEach((input) => {
+  input.addEventListener("change", (event) => updateVisualMode(event.target.value));
+});
+
+window.addEventListener("resize", drawCanvas);
+
+updateStep(0);
+drawCanvas();
